@@ -1,0 +1,65 @@
+# Переменные окружения
+.env
+.env.local
+
+# База данных
+*.db
+*.db-journal
+
+# Загруженные файлы
+# Игнорируем все в папке downloads, кроме .gitkeep
+downloads/*
+!downloads/.gitkeep
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.avi
+*.mov
+*.ogg
+*.wav
+*.mp3
+*.pdf
+*.doc
+*.docx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Виртуальное окружение
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Логи
+*.log
+
