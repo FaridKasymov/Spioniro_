@@ -124,8 +124,9 @@ async def save_message(message: Message):
 
 async def get_message_from_db(chat_id: int, message_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
+        # Добавили user_id в запрос
         async with db.execute(
-            "SELECT user_name, message_text, file_path, media_type, date FROM messages WHERE chat_id = ? AND message_id = ?", 
+            "SELECT user_id, user_name, message_text, file_path, media_type, date FROM messages WHERE chat_id = ? AND message_id = ?", 
             (chat_id, message_id)
         ) as cursor:
             return await cursor.fetchone()
@@ -138,6 +139,10 @@ async def monitor_business_messages(message: Message):
 
 @dp.edited_business_message()
 async def handle_edited_messages(message: Message):
+    # Если это вы (Админ), ничего не делаем
+    if message.from_user and message.from_user.id == ADMIN_ID:
+        return
+
     # 1. Сначала достаем старую версию
     old_msg = await get_message_from_db(message.chat.id, message.message_id)
     
@@ -145,7 +150,8 @@ async def handle_edited_messages(message: Message):
     
     # 2. Если сообщение было в базе, сравниваем
     if old_msg:
-        user_name, old_text, file_path, media_type, date_str = old_msg
+        # Распаковываем с учетом user_id
+        _, user_name, old_text, file_path, media_type, date_str = old_msg
         
         # Если текст изменился (и это не просто обновление статуса файла)
         if old_text != new_text:
@@ -170,7 +176,12 @@ async def handle_deleted_messages(event: BusinessMessagesDeleted):
         saved_msg = await get_message_from_db(event.chat.id, msg_id)
         
         if saved_msg:
-            user_name, text, file_path, media_type, date_str = saved_msg
+            # Распаковываем данные
+            saved_user_id, user_name, text, file_path, media_type, date_str = saved_msg
+            
+            # Если удалил админ (вы) - пропускаем
+            if saved_user_id == ADMIN_ID:
+                continue
             
             caption_text = (
                 f"<b>Сообщение удалили, это треш.</b>\n"
@@ -221,4 +232,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logging.info("Стоп.")
-
