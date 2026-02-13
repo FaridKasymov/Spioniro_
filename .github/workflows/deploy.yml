@@ -3,7 +3,6 @@ name: Deploy to Railway
 on:
   push:
     branches:
-      - main  # или master, проверьте как называется ваша основная ветка
   workflow_dispatch:
 
 jobs:
