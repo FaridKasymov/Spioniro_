@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TERMINAL_ADMIN</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* --- ХАКЕРСКИЙ СТИЛЬ --- */
+        body {
+            background-color: #0a0a0a;
+            color: #00ff41;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            text-shadow: 0 0 8px rgba(0, 255, 65, 0.8);
+            border-bottom: 2px solid #00ff41;
+            padding-bottom: 10px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            font-size: 24px;
+            letter-spacing: 2px;
+        }
+        .sys-msg {
+            font-size: 12px;
+            color: #008f11;
+            margin-bottom: 20px;
+        }
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+        
+        .stats-box {
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #00ff41;
+            padding: 15px;
+            background-color: rgba(0, 20, 0, 0.5);
+            box-shadow: inset 0 0 10px rgba(0, 255, 65, 0.2);
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            border-bottom: 1px dashed #005f18;
+            padding-bottom: 5px;
+        }
+        button {
+            background-color: transparent;
+            color: #00ff41;
+            border: 2px solid #00ff41;
+            padding: 15px;
+            font-size: 16px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            width: 100%;
+            max-width: 400px;
+            text-transform: uppercase;
+        }
+        button:hover {
+            background-color: #00ff41;
+            color: #000;
+            box-shadow: 0 0 15px #00ff41;
+        }
+
+        /* --- НОВЫЕ СТИЛИ ДЛЯ КЛИКОВ И ОКНА --- */
+        .clickable {
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .clickable:hover {
+            color: #fff;
+            background: #00ff41;
+        }
+        #modal {
+            display: none;
+            position: fixed;
+            top: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 450px;
+            background: #0a0a0a;
+            border: 2px solid #00ff41;
+            padding: 20px;
+            z-index: 100;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 0 20px #00ff41;
+            box-sizing: border-box;
+        }
+        #modal-close {
+            float: right;
+            width: auto;
+            padding: 5px 15px;
+            margin-bottom: 10px;
+        }
+        .msg-block {
+            border-left: 2px dashed #005f18;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+
+        #gallery-modal {
+            display: none;
+            position: fixed;
+            top: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 450px;
+            background: #0a0a0a;
+            border: 2px solid #00ff41;
+            padding: 20px;
+            z-index: 200;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 0 20px #00ff41;
+            box-sizing: border-box;
+        }
+        #gallery-modal-close {
+            float: right;
+            width: auto;
+            padding: 5px 15px;
+            margin-bottom: 10px;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+            clear: both;
+        }
+        .gallery-item {
+            aspect-ratio: 1 / 1;
+            overflow: hidden;
+            border: 1px solid #005f18;
+            background: rgba(0, 20, 0, 0.6);
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        .gallery-item img,
+        .gallery-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .gallery-plaque {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            box-sizing: border-box;
+            font-size: 10px;
+            text-align: center;
+            color: #00ff41;
+            line-height: 1.25;
+            border: 1px dashed #005f18;
+        }
+        .gallery-plaque span:first-child {
+            font-size: 22px;
+            margin-bottom: 4px;
+            line-height: 1;
+        }
+
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+            background: rgba(0, 20, 0, 0.97);
+            z-index: 300;
+            flex-direction: column;
+            touch-action: manipulation;
+        }
+        .lightbox-stage {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 0;
+            position: relative;
+            padding: 52px 44px 20px;
+            box-sizing: border-box;
+        }
+        #lightbox-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        #lightbox-content img,
+        #lightbox-content video {
+            max-width: 100%;
+            max-height: calc(100dvh - 100px);
+            max-height: calc(100vh - 100px);
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border: 2px solid #00ff41;
+            box-shadow: 0 0 20px #00ff41;
+        }
+        #lightbox .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 320;
+            background: transparent;
+            color: #00ff41;
+            border: 2px solid #00ff41;
+            padding: 10px;
+            cursor: pointer;
+            width: auto;
+            font-family: inherit;
+            font-weight: bold;
+        }
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 310;
+            background: rgba(0, 20, 0, 0.88);
+            color: #00ff41;
+            border: 2px solid #00ff41;
+            padding: 14px 10px;
+            cursor: pointer;
+            width: auto;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 28px;
+            line-height: 1;
+            min-width: 44px;
+        }
+        .lightbox-nav:disabled {
+            opacity: 0.25;
+            cursor: not-allowed;
+        }
+        .lightbox-prev {
+            left: 6px;
+        }
+        .lightbox-next {
+            right: 6px;
+        }
+        #lightbox-counter {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #008f11;
+            z-index: 310;
+        }
+        #lightbox-content a.lightbox-download {
+            color: #00ff41;
+            font-size: 16px;
+            border: 2px solid #00ff41;
+            padding: 16px 24px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        #lightbox-content a.lightbox-download:hover {
+            background: #00ff41;
+            color: #000;
+        }
+        .hacker-audio {
+            width: 100%;
+            margin-top: 10px;
+            border-radius: 30px;
+            border: 1px solid #00ff41;
+            background-color: #0a0a0a;
+        }
+        .gallery-doc {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            box-sizing: border-box;
+            font-size: 10px;
+            text-align: center;
+            color: #00ff41;
+            line-height: 1.25;
+            border: 1px dashed #005f18;
+        }    
+        .hacker-input {
+            width: 100%;
+            background: transparent;
+            border: 2px solid #00ff41;
+            color: #00ff41;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+        }
+        .hacker-input:focus {
+            box-shadow: 0 0 10px #00ff41;
+        }
+        .hacker-input::placeholder {
+            color: #005f18;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>> _SPIONIRO_</h1>
+
+    <div class="stats-box" id="stats-container">
+        <div style="text-align: center;" class="blink">[ СБОР ДАННЫХ... ]</div>
+    </div>
+
+    <button onclick="openGallery()">
+        > ОТКРЫТЬ ГАЛЕРЕЮ ФАЙЛОВ
+    </button>
+
+    <!-- ВСПЛЫВАЮЩЕЕ ОКНО ДЛЯ СООБЩЕНИЙ -->
+    <div id="modal">
+        <button id="modal-close" onclick="closeModal()">ЗАКРЫТЬ [X]</button>
+        <div id="modal-content"></div>
+    </div>
+
+    <div id="gallery-modal">
+        <button id="gallery-modal-close" onclick="closeGallery()">ЗАКРЫТЬ [X]</button>
+        <div id="gallery-content"></div>
+    </div>
+
+    <div id="lightbox">
+        <button type="button" class="close-btn" onclick="closeLightbox()">ЗАКРЫТЬ [X]</button>
+        <div class="lightbox-stage" id="lightbox-stage">
+            <button type="button" class="lightbox-nav lightbox-prev" id="lightbox-prev" onclick="lightboxPrev()">‹</button>
+            <div id="lightbox-content"></div>
+            <button type="button" class="lightbox-nav lightbox-next" id="lightbox-next" onclick="lightboxNext()">›</button>
+        </div>
+        <div id="lightbox-counter"></div>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let galleryItems = [];
+        let lightboxIndex = 0;
+        let lightboxTouchX0 = null;
+
+        function escapeHtml(s) {
+            if (s == null || s === '') return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        async function fetchStats() {
+            try {
+                let response = await fetch('/api/stats');
+                let data = await response.json();
+                
+                if (data.status === 'ok') {
+                    let html = `<div class="stat-line"><span>> ИНЦИДЕНТОВ:</span> <span>${data.total_messages}</span></div>`;
+                    html += `<div class="stat-line"><span>> РАЗМЕР СЕРВЕРА:</span> <span>${data.folder_size_mb} MB</span></div>`;
+                    html += `<br><div style="text-decoration: underline; margin-bottom: 10px;">> ТОП СОБЕСЕДНИКОВ:</div>`;
+                    
+                    data.top_users.forEach((user, index) => {
+                        // ТЕПЕРЬ ИМЯ - ЭТО КНОПКА
+                        html += `<div class="stat-line">
+                            <span class="clickable" onclick="loadUserMessages('${user.name}')">0${index + 1}. ${user.name}</span> 
+                            <span>${user.count}</span>
+                        </div>`;
+                    });
+                    
+                    document.getElementById('stats-container').innerHTML = html;
+                } else {
+                    document.getElementById('stats-container').innerHTML = `> ОШИБКА: ${data.detail}`;
+                }
+            } catch (error) {
+                document.getElementById('stats-container').innerHTML = `> СВЯЗЬ ПОТЕРЯНА.`;
+            }
+        }
+
+        // НОВАЯ ФУНКЦИЯ: Загрузка сообщений агента
+        async function loadUserMessages(userName) {
+            document.getElementById('modal').style.display = 'block';
+            document.getElementById('modal-content').innerHTML = '<span class="blink">[ ИЗВЛЕЧЕНИЕ ДАННЫХ... ]</span>';
+            
+            try {
+                let response = await fetch('/api/messages/' + encodeURIComponent(userName));
+                let data = await response.json();
+                
+                if (data.status === 'ok') {
+                    let html = `<h3 style="margin-top:0;">> СОБЕСЕДНИК: ${userName}</h3>`;
+                    // Добавляем поле поиска
+                if (data.messages.length > 0) {
+                    html += `<input type="text" id="searchInput" class="hacker-input" placeholder="> ВВЕДИТЕ ТЕКСТ ДЛЯ ПОИСКА..." onkeyup="filterMessages()">`;
+                }
+                    if (data.messages.length === 0) {
+                        html += `<p>Данные отсутствуют.</p>`;
+                    } else {
+                        data.messages.forEach(msg => {
+                            // Делаем дату читаемой
+                            let dateObj = new Date(msg.date);
+                            let dateStr = dateObj.toLocaleString('ru-RU');
+                            
+                            // Выбираем ярлык
+                            let marker = msg.status === 'deleted' ? '<span style="color:red">[УДАЛЕНО]</span>' : '<span style="color:yellow">[ИЗМЕНЕНО]</span>';
+                            let mediaInfo = msg.type !== 'text' ? ` | 📁 ${msg.type.toUpperCase()}` : '';
+
+                            let oldLine = '';
+                            if (msg.status === 'edited' && msg.old_text) {
+                                oldLine = `<div style="color: #888; margin-bottom: 6px; white-space: pre-wrap;">${escapeHtml(msg.old_text)}</div>`;
+                            }
+
+                            let textContent = escapeHtml(msg.text);
+                            if (msg.type === 'voice' && msg.url) {
+                                textContent += `<audio controls class="hacker-audio" src="${encodeURI(msg.url)}"></audio>`;
+                            }
+
+                            html += `<div class="msg-block">
+                                <div style="color: #008f11; margin-bottom: 5px;">${dateStr} ${marker}${mediaInfo}</div>
+                                ${oldLine}
+                                <div style="white-space: pre-wrap;">${textContent}</div>
+                            </div>`;
+                        });
+                    }
+                    document.getElementById('modal-content').innerHTML = html;
+                } else {
+                    document.getElementById('modal-content').innerHTML = `> ОШИБКА: ${data.detail}`;
+                }
+            } catch (error) {
+                document.getElementById('modal-content').innerHTML = '> ОШИБКА ДОСТУПА К БАЗЕ.';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function viewMedia(url, type) {
+            if (type === 'voice') {
+                let idx = galleryItems.findIndex(function (it) {
+                    return it.url === url && it.type === 'voice';
+                });
+                if (idx >= 0) {
+                    openLightbox(idx);
+                } else {
+                    let content = document.getElementById('lightbox-content');
+                    let u = encodeURI(url);
+                    content.innerHTML =
+                        '<audio controls autoplay src="' +
+                        u +
+                        '" style="width: 90%; max-width: 400px; outline: 3px solid #00ff41; border-radius: 30px;"></audio>';
+                    document.getElementById('lightbox').style.display = 'flex';
+                    document.getElementById('lightbox-prev').disabled = true;
+                    document.getElementById('lightbox-next').disabled = true;
+                    document.getElementById('lightbox-counter').textContent = '';
+                }
+            }
+        }
+
+        function renderLightboxSlide() {
+            let content = document.getElementById('lightbox-content');
+            let item = galleryItems[lightboxIndex];
+            if (!item) return;
+            let u = encodeURI(item.url);
+            let type = item.type;
+            content.innerHTML = '';
+            if (type === 'photo') {
+                content.innerHTML = '<img src="' + u + '" alt="">';
+            } else if (type === 'video' || type === 'video_note') {
+                content.innerHTML =
+                    '<video src="' + u + '" controls autoplay playsinline></video>';
+            } else if (type === 'voice') {
+                content.innerHTML =
+                    '<audio controls autoplay src="' +
+                    u +
+                    '" style="width: 90%; max-width: 400px; outline: 3px solid #00ff41; border-radius: 30px;"></audio>';
+            } else {
+                content.innerHTML =
+                    '<a class="lightbox-download" href="' + u + '" download>Скачать файл</a>';
+            }
+            let prevBtn = document.getElementById('lightbox-prev');
+            let nextBtn = document.getElementById('lightbox-next');
+            let n = galleryItems.length;
+            prevBtn.disabled = lightboxIndex <= 0;
+            nextBtn.disabled = lightboxIndex >= n - 1;
+            let counter = document.getElementById('lightbox-counter');
+            counter.textContent = n > 1 ? lightboxIndex + 1 + ' / ' + n : '';
+        }
+
+        function openLightbox(index) {
+            if (!galleryItems.length) return;
+            lightboxIndex = Math.max(0, Math.min(index, galleryItems.length - 1));
+            renderLightboxSlide();
+            document.getElementById('lightbox').style.display = 'flex';
+        }
+
+        function lightboxPrev() {
+            if (lightboxIndex > 0) {
+                lightboxIndex--;
+                renderLightboxSlide();
+            }
+        }
+
+        function lightboxNext() {
+            if (lightboxIndex < galleryItems.length - 1) {
+                lightboxIndex++;
+                renderLightboxSlide();
+            }
+        }
+
+        function closeLightbox() {
+            let box = document.getElementById('lightbox');
+            let content = document.getElementById('lightbox-content');
+            box.style.display = 'none';
+            content.innerHTML = '';
+            document.getElementById('lightbox-counter').textContent = '';
+        }
+
+        (function setupLightboxSwipe() {
+            let stage = document.getElementById('lightbox-stage');
+            stage.addEventListener(
+                'touchstart',
+                function (e) {
+                    lightboxTouchX0 = e.changedTouches[0].screenX;
+                },
+                { passive: true }
+            );
+            stage.addEventListener(
+                'touchend',
+                function (e) {
+                    if (lightboxTouchX0 === null) return;
+                    let x1 = e.changedTouches[0].screenX;
+                    let dx = x1 - lightboxTouchX0;
+                    lightboxTouchX0 = null;
+                    if (dx > 56) lightboxPrev();
+                    else if (dx < -56) lightboxNext();
+                },
+                { passive: true }
+            );
+        })();
+
+        async function openGallery() {
+            document.getElementById('gallery-modal').style.display = 'block';
+            document.getElementById('gallery-content').innerHTML = '<span class="blink">[ ЗАГРУЗКА МЕДИА... ]</span>';
+            try {
+                let response = await fetch('/api/media');
+                let data = await response.json();
+                if (data.status !== 'ok') {
+                    document.getElementById('gallery-content').innerHTML =
+                        '> ОШИБКА: ' + escapeHtml(data.detail || 'unknown');
+                    return;
+                }
+                if (!data.media || data.media.length === 0) {
+                    galleryItems = [];
+                    document.getElementById('gallery-content').innerHTML =
+                        '<p style="color:#008f11;margin:0;">Файлы не найдены.</p>';
+                    return;
+                }
+                galleryItems = data.media.slice();
+                let html = '<h3 style="margin-top:0;">> ГАЛЕРЕЯ</h3><div class="gallery-grid">';
+                data.media.forEach((item, i) => {
+                    let u = encodeURI(item.url);
+                    let inner;
+                    if (item.type === 'photo') {
+                        inner = '<img src="' + u + '" alt="" loading="lazy">';
+                    } else if (item.type === 'video' || item.type === 'video_note') {
+                        inner = '<video muted autoplay loop playsinline src="' + u + '"></video>';
+                    } else if (item.type === 'voice') {
+                        inner =
+                            '<div class="gallery-doc">🎤<br>ГОЛОСОВОЕ<br>От: ' +
+                            escapeHtml(item.user_name) +
+                            '</div>';
+                        html +=
+                            '<div class="gallery-item" onclick=\'viewMedia(' +
+                            JSON.stringify(item.url) +
+                            ', ' +
+                            JSON.stringify(item.type) +
+                            ')\'>' +
+                            inner +
+                            '</div>';
+                        return;
+                    } else {
+                        let label = escapeHtml((item.type || 'file').toUpperCase());
+                        inner =
+                            '<div class="gallery-plaque"><span>📎</span><span>' + label + '</span></div>';
+                    }
+                    html += '<div class="gallery-item" onclick="openLightbox(' + i + ')">' + inner + '</div>';
+                });
+                html += '</div>';
+                document.getElementById('gallery-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('gallery-content').innerHTML = '> ОШИБКА ЗАГРУЗКИ МЕДИА.';
+            }
+        }
+
+        function closeGallery() {
+            document.getElementById('gallery-modal').style.display = 'none';
+        }
+        // НОВАЯ ФУНКЦИЯ: Мгновенный поиск по сообщениям
+        function filterMessages() {
+            let input = document.getElementById('searchInput').value.toLowerCase();
+            let blocks = document.querySelectorAll('#modal-content .msg-block');
+            blocks.forEach(block => {
+                if (block.innerText.toLowerCase().includes(input)) {
+                    block.style.display = 'block';
+                } else {
+                    block.style.display = 'none';
+                }
+            });
+        }
+        fetchStats();
+    </script>
+</body>
+</html>

@@ -8,8 +8,10 @@ from zoneinfo import ZoneInfo
 import aiosqlite
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message, BusinessMessagesDeleted, FSInputFile
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.filters import Command
 from dotenv import load_dotenv
 
 # ИМПОРТЫ ДЛЯ ШИФРОВАНИЯ
@@ -25,6 +27,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 DB_NAME = os.getenv("DB_NAME", "business_logs.db")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://your-cloudflare-tunnel.trycloudflare.com")
 
 # Проверка обязательных параметров
 if not API_TOKEN:
@@ -67,9 +70,11 @@ async def init_db():
                 user_id INTEGER,
                 user_name TEXT,
                 message_text TEXT,
+                old_message_text TEXT,
                 file_path TEXT, 
                 media_type TEXT,
                 date TEXT,
+                status TEXT DEFAULT 'active',
                 PRIMARY KEY (message_id, chat_id)
             )
         """)
@@ -78,9 +83,17 @@ async def init_db():
             await db.execute("ALTER TABLE messages ADD COLUMN media_type TEXT")
         except:
             pass
+        try:
+            await db.execute("ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'active'")
+        except:
+            pass
+        try:
+            await db.execute("ALTER TABLE messages ADD COLUMN old_message_text TEXT")
+        except:
+            pass
         await db.commit()
 
-async def save_message(message: Message):
+async def save_message(message: Message, status: str = "active", old_text: str | None = None):
     text = message.text or message.caption or ""
     file_path = None
     media_type = "text"
@@ -138,23 +151,26 @@ async def save_message(message: Message):
         user_id = 0
 
     encrypted_text = encryptor.encrypt_message(text)
+    encrypted_old = encryptor.encrypt_message(old_text) if old_text is not None else None
 
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
-            "INSERT OR REPLACE INTO messages (message_id, chat_id, user_id, user_name, message_text, file_path, media_type, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO messages (message_id, chat_id, user_id, user_name, message_text, old_message_text, file_path, media_type, date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 message.message_id, 
                 message.chat.id, 
                 user_id, 
                 name, 
-                encrypted_text, 
+                encrypted_text,
+                encrypted_old,
                 file_path, 
                 media_type, 
-                datetime.now(ZoneInfo("Europe/Moscow")).isoformat() 
+                datetime.now(ZoneInfo("Europe/Moscow")).isoformat(),
+                status,
             )
         )
         await db.commit()
-
+                
 async def get_message_from_db(chat_id: int, message_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute(
@@ -177,6 +193,23 @@ async def get_message_from_db(chat_id: int, message_id: int):
             return (user_id, user_name, decrypted_text, file_path, media_type, date)
 
 # --- ХЭНДЛЕРЫ ---
+
+@dp.message(Command("admin"))
+async def admin_panel(message: Message):
+    if not message.from_user or message.from_user.id != ADMIN_ID:
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Открыть админ-панель",
+                    web_app=WebAppInfo(url=WEB_APP_URL),
+                )
+            ]
+        ]
+    )
+    await message.answer("Откройте мини-приложение для просмотра статистики:", reply_markup=keyboard)
 
 @dp.business_message()
 async def monitor_business_messages(message: Message):
@@ -219,8 +252,11 @@ async def handle_edited_messages(message: Message):
             except Exception as e:
                 logging.error(f"Ошибка отправки отчета о редактировании: {e}")
                 
-    # 3. В конце обновляем запись в базе данных на новую версию
-    await save_message(message)
+    # 3. В конце обновляем запись в базе данных на новую версию и ставим статус 'edited'
+    old_plain = None
+    if old_msg:
+        _, _, old_plain, _, _, _ = old_msg
+    await save_message(message, status="edited", old_text=old_plain)
 
 @dp.deleted_business_messages()
 async def handle_deleted_messages(event: BusinessMessagesDeleted):
@@ -228,12 +264,16 @@ async def handle_deleted_messages(event: BusinessMessagesDeleted):
         saved_msg = await get_message_from_db(event.chat.id, msg_id)
         
         if saved_msg:
+            # --- Обновляем статус в базе на удаленный ---
+            async with aiosqlite.connect(DB_NAME) as db:
+                await db.execute("UPDATE messages SET status = 'deleted' WHERE chat_id = ? AND message_id = ?", (event.chat.id, msg_id))
+                await db.commit()
+
             saved_user_id, user_name, text, file_path, media_type, date_str = saved_msg
             
-            # Если удалил админ (вы) - пропускаем
             if saved_user_id == ADMIN_ID:
                 continue
-            
+      
             # --- ПРИМЕНЯЕМ НАШУ ФУНКЦИЮ ЗДЕСЬ ---
             beautiful_date = format_date(date_str)
             
