@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 # ИМПОРТЫ ДЛЯ ШИФРОВАНИЯ
 from security import MessageEncryptor
-from cryptography.fernet import InvalidToken # <-- ДОБАВЛЕНО: Импорт правильной ошибки
+from cryptography.fernet import InvalidToken
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -39,6 +39,19 @@ if not ENCRYPTION_KEY:
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 encryptor = MessageEncryptor(ENCRYPTION_KEY)
+
+def format_date(iso_date_str: str) -> str:
+    """Берет дату из базы данных и делает её красивой."""
+    if not iso_date_str:
+        return "Неизвестно"
+    try:
+        # Превращаем строку в объект времени
+        dt = datetime.fromisoformat(iso_date_str)
+        # Задаем нужный формат: День.Месяц.Год, Часы:Минуты:Секунды
+        return dt.strftime("%d.%m.%Y, %H:%M:%S")
+    except Exception:
+        # Если что-то пойдет не так, возвращаем как было, чтобы бот не сломался
+        return iso_date_str
 
 if not os.path.exists(DOWNLOAD_DIR):
     os.makedirs(DOWNLOAD_DIR)
@@ -147,7 +160,7 @@ async def get_message_from_db(chat_id: int, message_id: int):
             # --- ИСПРАВЛЕННЫЙ БЛОК ---
             try:
                 decrypted_text = encryptor.decrypt_message(encrypted_text)
-            except InvalidToken: # <-- ИЗМЕНЕНО: Теперь ловим правильную ошибку
+            except InvalidToken:
                 # Поддержка старых незашифрованных записей в базе.
                 decrypted_text = encrypted_text
                 
@@ -165,22 +178,30 @@ async def handle_edited_messages(message: Message):
     if message.from_user and message.from_user.id == ADMIN_ID:
         return
 
-    # 1. Сначала достаем старую версию
+    # 1. Сначала достаем старую версию из базы
     old_msg = await get_message_from_db(message.chat.id, message.message_id)
     
+    # Новый текст (учитываем и подписи к медиа)
     new_text = message.text or message.caption or ""
     
-    # 2. Если сообщение было в базе, сравниваем
+    # 2. Если сообщение было в базе, сравниваем и уведомляем
     if old_msg:
+        # Распаковываем данные
         _, user_name, old_text, file_path, media_type, date_str = old_msg
         
-        # Если текст изменился (и это не просто обновление статуса файла)
+        # Если текст изменился
         if old_text != new_text:
+            # Делаем дату красивой
+            beautiful_date = format_date(date_str)
+            
+            # Формируем презентабельный отчет
             report = (
-                f"<b>Сообщение изменили, делаем выводы...</b>\n\n"
-                f"<b>Автор:</b> {user_name}\n"
-                f"<b>БЫЛО:</b> {old_text}\n"
-                f"<b>СТАЛО:</b> {new_text}"
+                f"✏️ <b>Сообщение отредактировано!</b>\n\n"
+                f"👤 <b>Автор:</b> {user_name}\n"
+                f"🕒 <b>Дата оригинала:</b> {beautiful_date}\n"
+                f"📁 <b>Тип:</b> {media_type}\n\n"
+                f"❌ <b>БЫЛО:</b>\n<code>{old_text}</code>\n\n"
+                f"✅ <b>СТАЛО:</b>\n<code>{new_text}</code>"
             )
             
             try:
@@ -188,7 +209,7 @@ async def handle_edited_messages(message: Message):
             except Exception as e:
                 logging.error(f"Ошибка отправки отчета о редактировании: {e}")
                 
-    # 3. В конце обязательно сохраняем новую версию в базу
+    # 3. В конце обновляем запись в базе данных на новую версию
     await save_message(message)
 
 @dp.deleted_business_messages()
@@ -203,12 +224,15 @@ async def handle_deleted_messages(event: BusinessMessagesDeleted):
             if saved_user_id == ADMIN_ID:
                 continue
             
+            # --- ПРИМЕНЯЕМ НАШУ ФУНКЦИЮ ЗДЕСЬ ---
+            beautiful_date = format_date(date_str)
+            
             caption_text = (
-                f"<b>Сообщение удалили, это треш.</b>\n"
-                f"<b>От:</b> {user_name}\n"
-                f"<b>Тип:</b> {media_type}\n"
-                f"<b>Дата:</b> {date_str}\n"
-                f"<b>Текст:</b> {text}"
+                f"🗑 <b>Сообщение удалили!</b>\n\n" 
+                f"👤 <b>От:</b> {user_name}\n"
+                f"📁 <b>Тип:</b> {media_type}\n"
+                f"🕒 <b>Дата:</b> {beautiful_date}\n\n"
+                f"📝 <b>Текст:</b> {text}"
             )
 
             try:
