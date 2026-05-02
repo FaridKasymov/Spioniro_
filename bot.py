@@ -11,6 +11,10 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 
+# ИМПОРТЫ ДЛЯ ШИФРОВАНИЯ
+from security import MessageEncryptor
+from cryptography.fernet import InvalidToken # <-- ДОБАВЛЕНО: Импорт правильной ошибки
+
 # Загружаем переменные окружения
 load_dotenv()
 
@@ -19,6 +23,7 @@ API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 DB_NAME = os.getenv("DB_NAME", "business_logs.db")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 
 # Проверка обязательных параметров
 if not API_TOKEN:
@@ -27,9 +32,13 @@ if not API_TOKEN:
 if not ADMIN_ID:
     raise ValueError("ADMIN_ID не установлен! Установите его в переменной окружения или в .env файле")
 
+if not ENCRYPTION_KEY:
+    raise ValueError("ENCRYPTION_KEY не установлен! Установите его в .env файле")
+
 # --- ИНИЦИАЛИЗАЦИЯ ---
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
+encryptor = MessageEncryptor(ENCRYPTION_KEY)
 
 if not os.path.exists(DOWNLOAD_DIR):
     os.makedirs(DOWNLOAD_DIR)
@@ -92,7 +101,6 @@ async def save_message(message: Message):
         destination = os.path.join(DOWNLOAD_DIR, file_name)
         
         # Скачиваем файл только если его еще нет или это новое сообщение
-        # (чтобы не перекачивать при каждом редактировании текста, если файл тот же)
         if not os.path.exists(destination):
             try:
                 file_info = await bot.get_file(file_id)
@@ -115,21 +123,35 @@ async def save_message(message: Message):
         name = "Неизвестный"
         user_id = 0
 
+    encrypted_text = encryptor.encrypt_message(text)
+
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
             "INSERT OR REPLACE INTO messages (message_id, chat_id, user_id, user_name, message_text, file_path, media_type, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (message.message_id, message.chat.id, user_id, name, text, file_path, media_type, datetime.now().isoformat())
+            (message.message_id, message.chat.id, user_id, name, encrypted_text, file_path, media_type, datetime.now().isoformat())
         )
         await db.commit()
 
 async def get_message_from_db(chat_id: int, message_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
-        # Добавили user_id в запрос
         async with db.execute(
             "SELECT user_id, user_name, message_text, file_path, media_type, date FROM messages WHERE chat_id = ? AND message_id = ?", 
             (chat_id, message_id)
         ) as cursor:
-            return await cursor.fetchone()
+            row = await cursor.fetchone()
+            if not row:
+                return None
+
+            user_id, user_name, encrypted_text, file_path, media_type, date = row
+            
+            # --- ИСПРАВЛЕННЫЙ БЛОК ---
+            try:
+                decrypted_text = encryptor.decrypt_message(encrypted_text)
+            except InvalidToken: # <-- ИЗМЕНЕНО: Теперь ловим правильную ошибку
+                # Поддержка старых незашифрованных записей в базе.
+                decrypted_text = encrypted_text
+                
+            return (user_id, user_name, decrypted_text, file_path, media_type, date)
 
 # --- ХЭНДЛЕРЫ ---
 
@@ -150,7 +172,6 @@ async def handle_edited_messages(message: Message):
     
     # 2. Если сообщение было в базе, сравниваем
     if old_msg:
-        # Распаковываем с учетом user_id
         _, user_name, old_text, file_path, media_type, date_str = old_msg
         
         # Если текст изменился (и это не просто обновление статуса файла)
@@ -176,7 +197,6 @@ async def handle_deleted_messages(event: BusinessMessagesDeleted):
         saved_msg = await get_message_from_db(event.chat.id, msg_id)
         
         if saved_msg:
-            # Распаковываем данные
             saved_user_id, user_name, text, file_path, media_type, date_str = saved_msg
             
             # Если удалил админ (вы) - пропускаем
@@ -210,7 +230,6 @@ async def handle_deleted_messages(event: BusinessMessagesDeleted):
                     await bot.send_message(chat_id=ADMIN_ID, text=caption_text)
             except Exception as e:
                 logging.error(f"Ошибка отправки отчета: {e}")
-                # Если не вышло отправить медиа, шлем хотя бы текст
                 await bot.send_message(chat_id=ADMIN_ID, text=caption_text)
 
 # --- ЗАПУСК ---
