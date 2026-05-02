@@ -139,10 +139,21 @@ async def save_message(message: Message):
 
     encrypted_text = encryptor.encrypt_message(text)
 
-    async with aiosqlite.connect(DB_NAME) as db:
+   async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
-            "INSERT OR REPLACE INTO messages (message_id, chat_id, user_id, user_name, message_text, file_path, media_type, datetime.now(ZoneInfo("Europe/Moscow")).isoformat()) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (message.message_id, message.chat.id, user_id, name, encrypted_text, file_path, media_type, datetime.now().isoformat())
+            # Часть 1: Текст запроса
+            "INSERT OR REPLACE INTO messages (message_id, chat_id, user_id, user_name, message_text, file_path, media_type, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            # Часть 2: Наши значения в скобках
+            (
+                message.message_id, 
+                message.chat.id, 
+                user_id, 
+                name, 
+                encrypted_text, 
+                file_path, 
+                media_type, 
+                datetime.now(ZoneInfo("Europe/Moscow")).isoformat() 
+            )
         )
         await db.commit()
 
