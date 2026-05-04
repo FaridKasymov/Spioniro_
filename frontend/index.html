@@ -381,7 +381,11 @@
 
         async function fetchStats() {
             try {
-                let response = await fetch('/api/stats');
+                let response = await fetch('/api/stats', {
+    headers: {
+        'X-Telegram-Init-Data': tg.initData
+    }
+});
                 let data = await response.json();
                 
                 if (data.status === 'ok') {
@@ -412,7 +416,11 @@
             document.getElementById('modal-content').innerHTML = '<span class="blink">[ ИЗВЛЕЧЕНИЕ ДАННЫХ... ]</span>';
             
             try {
-                let response = await fetch('/api/messages/' + encodeURIComponent(userName));
+                let response = await fetch('/api/messages/' + encodeURIComponent(userName), {
+    headers: {
+        'X-Telegram-Init-Data': tg.initData
+    }
+});
                 let data = await response.json();
                 
                 if (data.status === 'ok') {
@@ -571,7 +579,11 @@
             document.getElementById('gallery-modal').style.display = 'block';
             document.getElementById('gallery-content').innerHTML = '<span class="blink">[ ЗАГРУЗКА МЕДИА... ]</span>';
             try {
-                let response = await fetch('/api/media');
+                let response = await fetch('/api/media', {
+    headers: {
+        'X-Telegram-Init-Data': tg.initData
+    }
+});
                 let data = await response.json();
                 if (data.status !== 'ok') {
                     document.getElementById('gallery-content').innerHTML =
